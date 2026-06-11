@@ -2,26 +2,56 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/EntKube.Web/EntKube.Web.csproj",
-        "/property:GenerateFullPaths=true",
-        "/consoleloggerparameters:NoSummary;ForceNoAlign"
-      ],
-      "problemMatcher": "$msCompile"
+      "label": "build: backend",
+      "type": "shell",
+      "command": "go build ./...",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$go"
     },
     {
-      "label": "test",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "test",
-        "${workspaceFolder}/tests/EntKube.Web.Tests/EntKube.Web.Tests.csproj"
-      ],
-      "problemMatcher": "$msCompile"
+      "label": "build: frontend",
+      "type": "shell",
+      "command": "npm run build",
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "test: backend",
+      "type": "shell",
+      "command": "go test ./...",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "group": "test",
+      "problemMatcher": "$go"
+    },
+    {
+      "label": "test: frontend",
+      "type": "shell",
+      "command": "npm test",
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "typecheck: frontend",
+      "type": "shell",
+      "command": "npm run typecheck",
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "docker: dev (single node)",
+      "type": "shell",
+      "command": "docker compose up --build",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: HA (two nodes)",
+      "type": "shell",
+      "command": "docker compose -f docker-compose.ha.yml up --build",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
     }
   ]
 }

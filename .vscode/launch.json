@@ -2,21 +2,38 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "EntKube.Web",
-      "type": "coreclr",
+      // Go backend — runs on :8080, reads from .env in the workspace root.
+      // Requires the "Go" extension (golang.go).
+      "name": "Go: backend",
+      "type": "go",
       "request": "launch",
-      "preLaunchTask": "build",
-      "program": "${workspaceFolder}/src/EntKube.Web/bin/Debug/net10.0/EntKube.Web.dll",
-      "args": [],
-      "cwd": "${workspaceFolder}/src/EntKube.Web",
-      "stopAtEntry": false,
-      "serverReadyAction": {
-        "action": "openExternally",
-        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
-      },
+      "mode": "debug",
+      "program": "${workspaceFolder}/backend/cmd/server",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
       "env": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "NODE_ADDRESS": "http://localhost:8080",
+        "NODE_KEY_FILE": "${workspaceFolder}/.dev-node-key.pem"
       }
+    },
+    {
+      // Frontend Vite dev server — hot-reload on :5173, proxies /api → :8080.
+      // Requires the "JavaScript Debugger" extension (built into VS Code).
+      "name": "Vite: frontend",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}/frontend",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // Compound: start backend and frontend together.
+      "name": "Full stack (backend + frontend)",
+      "type": "compound",
+      "configurations": ["Go: backend", "Vite: frontend"],
+      "stopAll": true
     }
   ]
 }

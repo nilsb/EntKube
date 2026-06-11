@@ -428,3 +428,14 @@ FodyWeavers.xsd
 
 # Local reference infrastructure (not part of the project)
 CMKS - Infra/
+
+# Go backend — build artifacts
+backend/bin/
+backend/static/
+
+# Frontend — build artifacts
+frontend/dist/
+frontend/src/routeTree.gen.ts
+
+# Local dev node key (generated on first run)
+.dev-node-key.pem

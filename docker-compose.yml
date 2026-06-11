@@ -1,26 +1,19 @@
+# docker-compose.yml — single-node dev/debug
+#
+# Runs the Go backend (with HA support enabled) and Postgres.
+# The frontend dev server is intentionally separate:
+#   cd frontend && npm run dev     ← hot-reload on :5173, proxies /api → :8080
+#
+# Usage:
+#   cp .env.example .env && docker compose up --build
+
 services:
-  caddy:
-    image: caddy:2
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    environment:
-      DOMAIN: "${DOMAIN}"
-      ACME_EMAIL: "${ACME_EMAIL}"
-    depends_on:
-      - entkube
-    restart: unless-stopped
 
   postgres:
-    image: postgres:17
+    image: postgres:17-alpine
     environment:
-      POSTGRES_DB: entkube
-      POSTGRES_USER: entkube
+      POSTGRES_DB:       entkube
+      POSTGRES_USER:     entkube
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-changeme}"
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -29,53 +22,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 10s
-    restart: unless-stopped
+    ports:
+      - "5432:5432"     # expose for local psql / migration tools
 
   entkube:
-    image: ${REGISTRY:-entit.azurecr.io}/entkube:${IMAGE_TAG:-latest}
-    volumes:
-      - entkube-data:/app/Data
+    build:
+      context: .        # root of the repo — picks up Dockerfile
+      dockerfile: Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      # --- Database ---
-      DatabaseProvider: Postgres
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=entkube;Username=entkube;Password=${POSTGRES_PASSWORD:-changeme}"
-
-      # --- Vault encryption ---
-      # Required — set VAULT__ROOTKEY in your .env file (openssl rand -base64 32)
-      Vault__RootKey: "${VAULT__ROOTKEY}"
-
-      # --- Reverse proxy ---
-      # Tells ASP.NET Core to trust X-Forwarded-For / X-Forwarded-Proto from Caddy.
-      # Required for Blazor Server SignalR (WebSocket) to work correctly behind a proxy.
-      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
-
-      # --- Auth ---
-      # Set to false after the first admin account is created.
-      Auth__AllowRegistration: "true"
-
-      # --- Temporary: log all HTTP requests so we can see 404s ---
-      Logging__LogLevel__Microsoft__AspNetCore__Hosting__Diagnostics: "Information"
-
-      # --- Bootstrap ---
-      # Optional. If set, this user is granted the Admin role on every startup
-      # (no-op if already admin). Useful for recovering access.
-      # Seed__AdminEmail: "admin@example.com"
-
-      # --- Email / SMTP (optional) ---
-      # Smtp__Host: "smtp.example.com"
-      # Smtp__Username: "user"
-      # Smtp__Password: "password"
-      # Smtp__FromAddress: "alerts@entkube.io"
+      DATABASE_URL:       "postgres://entkube:${POSTGRES_PASSWORD:-changeme}@postgres:5432/entkube?sslmode=disable"
+      VAULT_ROOT_KEY:     "${VAULT_ROOT_KEY}"
+      JWT_SECRET:         "${JWT_SECRET}"
+      NODE_ADDRESS:       "http://entkube:8080"
+      NODE_KEY_FILE:      "/data/node_key.pem"
+      PORT:               "8080"
+      HA_JOIN_TOKEN:      "${HA_JOIN_TOKEN}"
+      ADMIN_EMAIL:        "${ADMIN_EMAIL:-}"
+      ADMIN_PASSWORD:     "${ADMIN_PASSWORD:-}"
+      WEBHOOK_GIT_SECRET: "${WEBHOOK_GIT_SECRET:-}"
+    volumes:
+      - entkube-data:/data
+    ports:
+      - "8080:8080"
     restart: unless-stopped
 
 volumes:
-  # Named volumes are NOT removed by "docker compose down".
-  # Data is only deleted if you explicitly run "docker compose down -v".
   postgres-data:
   entkube-data:
-  caddy-data:
-  caddy-config:

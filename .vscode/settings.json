@@ -1,0 +1,40 @@
+{
+  // Go
+  "go.toolsManagement.autoUpdate": true,
+  "go.testFlags": ["-v"],
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "golang.go"
+  },
+
+  // TypeScript / React
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+
+  // Point the TS server at the frontend workspace so path aliases (@/) resolve
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+
+  // Exclude build artifacts and .NET leftovers from search/explorer
+  "files.exclude": {
+    "src/": true,
+    "tests/": true,
+    "backend/bin/": true,
+    "backend/static/": true,
+    "frontend/dist/": true,
+    "frontend/src/routeTree.gen.ts": false
+  },
+  "search.exclude": {
+    "src/": true,
+    "tests/": true,
+    "backend/bin/": true,
+    "backend/static/": true,
+    "frontend/dist/": true,
+    "**/node_modules": true
+  }
+}

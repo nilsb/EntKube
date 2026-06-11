@@ -1,0 +1,99 @@
+# docker-compose.ha.yml — two-node HA
+#
+# Both nodes share a Postgres instance. Each node has its own vault root key
+# and X25519 identity. Node 2 joins node 1 on startup via HA_PEERS.
+# Caddy load-balances with sticky-session cookies.
+#
+# Scale: add more node-N services following the node-2 pattern.
+#
+# Usage:
+#   cp .env.ha.example .env && docker compose -f docker-compose.ha.yml up --build
+
+services:
+
+  # ── Shared Postgres ──────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB:       entkube
+      POSTGRES_USER:     entkube
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U entkube -d entkube"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Node 1 (first to start; bootstraps admin user) ──────────
+  node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL:       "postgres://entkube:${POSTGRES_PASSWORD}@postgres:5432/entkube?sslmode=disable"
+      VAULT_ROOT_KEY:     "${VAULT_ROOT_KEY_NODE1}"
+      JWT_SECRET:         "${JWT_SECRET}"
+      NODE_ADDRESS:       "http://node-1:8080"
+      NODE_KEY_FILE:      "/data/node_key.pem"
+      PORT:               "8080"
+      HA_JOIN_TOKEN:      "${HA_JOIN_TOKEN}"
+      ADMIN_EMAIL:        "${ADMIN_EMAIL:-}"
+      ADMIN_PASSWORD:     "${ADMIN_PASSWORD:-}"
+      WEBHOOK_GIT_SECRET: "${WEBHOOK_GIT_SECRET:-}"
+    volumes:
+      - node1-data:/data
+    ports:
+      - "8081:8080"     # direct access for debugging
+
+  # ── Node 2 ───────────────────────────────────────────────────
+  node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      node-1:
+        condition: service_started
+    environment:
+      DATABASE_URL:   "postgres://entkube:${POSTGRES_PASSWORD}@postgres:5432/entkube?sslmode=disable"
+      VAULT_ROOT_KEY: "${VAULT_ROOT_KEY_NODE2}"
+      JWT_SECRET:     "${JWT_SECRET}"
+      NODE_ADDRESS:   "http://node-2:8080"
+      NODE_KEY_FILE:  "/data/node_key.pem"
+      PORT:           "8080"
+      HA_PEERS:       "http://node-1:8080"
+      HA_JOIN_TOKEN:  "${HA_JOIN_TOKEN}"
+    volumes:
+      - node2-data:/data
+    ports:
+      - "8082:8080"   # direct access for debugging
+
+  # ── Caddy load balancer (sticky sessions) ────────────────────
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - node-1
+      - node-2
+    volumes:
+      - ./Caddyfile.ha:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DOMAIN: "${DOMAIN:-localhost}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+
+volumes:
+  postgres-data:
+  node1-data:
+  node2-data:
+  caddy-data:
+  caddy-config:

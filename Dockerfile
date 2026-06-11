@@ -1,60 +1,33 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0.101 AS build
+# ── Stage 1: Build frontend ────────────────────────────────────
+FROM node:22-alpine AS frontend
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci --silent
+COPY frontend/ ./
+# Output to /dist/static so stage 2 can copy it cleanly
+RUN npx vite build --outDir /dist/static --emptyOutDir
+
+# ── Stage 2: Build backend ─────────────────────────────────────
+FROM golang:1.24-alpine AS backend
 WORKDIR /src
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+# Embed the pre-built SPA so the binary can serve it
+COPY --from=frontend /dist/static ./static
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
 
-# wasm-tools provides Microsoft.AspNetCore.App.Internal.Assets, which contains
-# blazor.web.js, blazor.server.js, and the other Blazor framework JS files.
-# Without this workload the publish output silently omits those files.
-RUN dotnet workload install wasm-tools
+# ── Stage 3: Minimal runtime ───────────────────────────────────
+FROM gcr.io/distroless/static-debian12:nonroot
 
-COPY Directory.Build.props ./
-COPY src/EntKube.Web/EntKube.Web.csproj src/EntKube.Web/
-COPY src/EntKube.Web.Client/EntKube.Web.Client.csproj src/EntKube.Web.Client/
-RUN dotnet restore src/EntKube.Web/EntKube.Web.csproj
+COPY --from=backend /server /server
+COPY --from=backend /src/static /static
 
-COPY src/ src/
-RUN dotnet publish src/EntKube.Web/EntKube.Web.csproj \
-    -c Release \
-    -o /app/publish
-
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
-WORKDIR /app
-
-# libgit2sharp needs libssl/libcurl; git is used by GitOperationsService;
-# kubectl and helm are invoked by KubernetesOperationsService/ComponentLifecycleService.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    libssl3 \
-    libcurl4 \
-    git \
-    openssh-client \
-    && rm -rf /var/lib/apt/lists/*
-
-# kubectl — latest stable, architecture-aware
-RUN ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && \
-    KUBECTL_VERSION=$(curl -fsSL https://dl.k8s.io/release/stable.txt) && \
-    curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" \
-         -o /usr/local/bin/kubectl && \
-    chmod +x /usr/local/bin/kubectl
-
-# helm — latest stable via official installer script
-RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-# Run as non-root
-RUN groupadd --system appgroup && useradd --system --gid appgroup --no-create-home appuser
-RUN mkdir -p /app/Data && chown appuser:appgroup /app/Data
-
-COPY --from=build /app/publish .
-RUN chown -R appuser:appgroup /app
-
-USER appuser
-
-ENV ASPNETCORE_URLS=http://+:8080
-ENV ASPNETCORE_ENVIRONMENT=Production
-
-# SQLite database lives here — mount a persistent volume at /app/Data
-VOLUME ["/app/Data"]
+# /data holds the per-node X25519 key pair — mount a named volume here
+VOLUME ["/data"]
 
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "EntKube.Web.dll"]
+ENV STATIC_DIR=/static
+
+ENTRYPOINT ["/server"]
