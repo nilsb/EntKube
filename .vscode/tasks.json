@@ -2,6 +2,15 @@
   "version": "2.0.0",
   "tasks": [
     {
+      // Copies .env.example → .env if .env is missing, so the debugger's
+      // envFile setting never fails with ENOENT on a fresh clone.
+      "label": "ensure: .env exists",
+      "type": "shell",
+      "command": "test -f .env || cp .env.example .env",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
       "label": "build: backend",
       "type": "shell",
       "command": "go build ./...",

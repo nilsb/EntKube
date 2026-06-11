@@ -4,12 +4,14 @@
     {
       // Go backend — runs on :8080, reads from .env in the workspace root.
       // Requires the "Go" extension (golang.go).
+      // Requires Postgres: docker compose up postgres
       "name": "Go: backend",
       "type": "go",
       "request": "launch",
       "mode": "debug",
       "program": "${workspaceFolder}/backend/cmd/server",
       "cwd": "${workspaceFolder}/backend",
+      "preLaunchTask": "ensure: .env exists",
       "envFile": "${workspaceFolder}/.env",
       "env": {
         "NODE_ADDRESS": "http://localhost:8080",
